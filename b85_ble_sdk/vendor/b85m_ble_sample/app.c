@@ -64,6 +64,9 @@
 #define 	   MY_ADV_INTERVAL_MIN						ADV_INTERVAL_30MS
 #define 	   MY_ADV_INTERVAL_MAX						ADV_INTERVAL_35MS
 
+#define 	MY_ADV_INTERVAL_MIN_2				ADV_INTERVAL_1S
+#define 	MY_ADV_INTERVAL_MAX_2				ADV_INTERVAL_1S
+
 #define	   MY_RF_POWER_INDEX							RF_POWER_P3dBm
 
 
@@ -119,6 +122,21 @@ const u8	tbl_advData[] = {
 const u8	tbl_scanRsp [] = {
 		 0x08, 0x09, 'v', 'S', 'a', 'm', 'p', 'l', 'e',
 	};
+_attribute_data_retention_ u8 iBeacon_advertData[] =
+    {
+        0x02, 0x01, 0x06, //Connection Flags
+        0x1A,             // length of this data (26 Bytes )
+        0xFF,             //manafacture specific data
+        0x4C,             //Apple Company ID 1
+        0x00,             //Apple Company ID 2
+        0x02, 0x15,       //Apple Pre-Amble
+        0x4F, 0x03, 0x58, 0xE0, 0x2E, 0xE7, 0x11, 0xE4, 0x8C, 0x21, 0x08, 0x00, 0x20, 0x0C, 0x9A, 0x66,
+        0x0B, 0xB8, //Major Value (2 Bytes)
+        0x0B, 0xBC, //Minor Value (2 Bytes)
+        0xC4,       //Calibrated rssi at 1 meter, -60 take 2s compliment of any value we want to set
+};
+
+const u8 ibeacon_scanRsp [] = {0};
 
 
 _attribute_data_retention_	int device_in_connection_state;
@@ -127,132 +145,19 @@ _attribute_data_retention_	u32	interval_update_tick;
 _attribute_data_retention_	u8	sendTerminate_before_enterDeep = 0;
 _attribute_data_retention_	u32	latest_user_event_tick;
 
+#define	APP_ADV_SETS_NUMBER						2		// Number of Supported Advertising Sets
+#define APP_MAX_LENGTH_ADV_DATA					31		// Maximum Advertising Data Length,   (if legacy ADV, max length 31 bytes is enough)
+#define APP_MAX_LENGTH_SCAN_RESPONSE_DATA		31		// Maximum Scan Response Data Length, (if legacy ADV, max length 31 bytes is enough)
 
+_attribute_data_retention_	u8  app_adv_set_param[ADV_SET_PARAM_LENGTH * APP_ADV_SETS_NUMBER];
 
-#if (UI_KEYBOARD_ENABLE)
+_attribute_data_retention_	u8	app_primary_adv_pkt[MAX_LENGTH_PRIMARY_ADV_PKT * APP_ADV_SETS_NUMBER];
 
-_attribute_data_retention_	int 		key_not_released;
-_attribute_data_retention_	u8 		key_type;
-_attribute_data_retention_	static 	u32 keyScanTick = 0;
+_attribute_data_retention_	u8	app_secondary_adv_pkt[MAX_LENGTH_SECOND_ADV_PKT * APP_ADV_SETS_NUMBER];
 
-extern u32	scan_pin_need;
+_attribute_data_retention_	u8 	app_advData[APP_MAX_LENGTH_ADV_DATA	* APP_ADV_SETS_NUMBER];
 
-#define CONSUMER_KEY   	   		1
-#define KEYBOARD_KEY   	   		2
-
-/**
- * @brief		this function is used to process keyboard matrix status change.
- * @param[in]	none
- * @return      none
- */
-void key_change_proc(void)
-{
-	latest_user_event_tick = clock_time();  //record latest key change time
-
-	u8 key0 = kb_event.keycode[0];
-	u8 key_buf[8] = {0,0,0,0,0,0,0,0};
-
-	key_not_released = 1;
-	if (kb_event.cnt == 2)   //two key press, do  not process
-	{
-	}
-	else if(kb_event.cnt == 1)
-	{
-		if(key0 >= CR_VOL_UP )  //volume up/down
-		{
-			key_type = CONSUMER_KEY;
-			u16 consumer_key;
-			if(key0 == CR_VOL_UP){  	//volume up
-				consumer_key = MKEY_VOL_UP;
-			}
-			else if(key0 == CR_VOL_DN){ //volume down
-				consumer_key = MKEY_VOL_DN;
-			}
-			blc_gatt_pushHandleValueNotify (BLS_CONN_HANDLE, HID_CONSUME_REPORT_INPUT_DP_H, (u8 *)&consumer_key, 2);
-		}
-		else
-		{
-			key_type = KEYBOARD_KEY;
-			key_buf[2] = key0;
-			blc_gatt_pushHandleValueNotify (BLS_CONN_HANDLE, HID_NORMAL_KB_REPORT_INPUT_DP_H, key_buf, 8);
-		}
-	}
-	else   //kb_event.cnt == 0,  key release
-	{
-		key_not_released = 0;
-		if(key_type == CONSUMER_KEY)
-		{
-			u16 consumer_key = 0;
-			blc_gatt_pushHandleValueNotify (BLS_CONN_HANDLE, HID_CONSUME_REPORT_INPUT_DP_H, (u8 *)&consumer_key, 2);
-		}
-		else if(key_type == KEYBOARD_KEY)
-		{
-			key_buf[2] = 0;
-			blc_gatt_pushHandleValueNotify (BLS_CONN_HANDLE, HID_NORMAL_KB_REPORT_INPUT_DP_H, key_buf, 8); //release
-		}
-	}
-}
-
-
-
-/**
- * @brief      this function is used to detect if key pressed or released.
- * @param[in]  e - LinkLayer Event type
- * @param[in]  p - data pointer of event
- * @param[in]  n - data length of event
- * @return     none
- */
-_attribute_ram_code_
-void proc_keyboard (u8 e, u8 *p, int n)
-{
-	if(clock_time_exceed(keyScanTick, 8000)){
-		keyScanTick = clock_time();
-	}
-	else{
-		return;
-	}
-
-	kb_event.keycode[0] = 0;
-	int det_key = kb_scan_key (0, 1);
-
-	if (det_key){
-		key_change_proc();
-	}
-}
-
-
-
-#elif (UI_BUTTON_ENABLE)
-
-
-_attribute_data_retention_ static int button_detect_en = 0;
-_attribute_data_retention_ static u32 button_detect_tick = 0;
-
-#endif
-
-
-
-/**
- * @brief      callback function of LinkLayer Event "BLT_EV_FLAG_SUSPEND_ENTER"
- * @param[in]  e - LinkLayer Event type
- * @param[in]  p - data pointer of event
- * @param[in]  n - data length of event
- * @return     none
- */
-void  ble_remote_set_sleep_wakeup (u8 e, u8 *p, int n)
-{
-	if( blc_ll_getCurrentState() == BLS_LINK_STATE_CONN && ((u32)(bls_pm_getSystemWakeupTick() - clock_time())) > 80 * SYSTEM_TIMER_TICK_1MS){  //suspend time > 30ms.add gpio wakeup
-		bls_pm_setWakeupSource(PM_WAKEUP_PAD);  //gpio pad wakeup suspend/deepsleep
-	}
-}
-
-
-
-
-
-
-
-
+_attribute_data_retention_	u8 	app_scanRspData[APP_MAX_LENGTH_SCAN_RESPONSE_DATA * APP_ADV_SETS_NUMBER];
 
 
 
@@ -267,13 +172,6 @@ void  ble_remote_set_sleep_wakeup (u8 e, u8 *p, int n)
 void 	app_switch_to_indirect_adv(u8 e, u8 *p, int n)
 {
 
-	bls_ll_setAdvParam( MY_ADV_INTERVAL_MIN, MY_ADV_INTERVAL_MAX,
-						ADV_TYPE_CONNECTABLE_UNDIRECTED, app_own_address_type,
-						0,  NULL,
-						MY_APP_ADV_CHANNEL,
-						ADV_FP_NONE);
-
-	bls_ll_setAdvEnable(1);  //must: set adv enable
 }
 
 
@@ -302,10 +200,6 @@ void 	task_terminate(u8 e,u8 *p, int n) //*p is terminate reason
 	else{
 
 	}
-
-	#if (UI_LED_ENABLE)
-		gpio_write(GPIO_LED_RED, !LED_ON_LEVAL);
-	#endif
 
 
 	#if (BLE_APP_PM_ENABLE)
@@ -358,10 +252,6 @@ void	task_connect (u8 e, u8 *p, int n)
 
 	interval_update_tick = clock_time() | 1; //none zero
 
-
-	#if (UI_LED_ENABLE)
-		gpio_write(GPIO_LED_RED, LED_ON_LEVAL);
-	#endif
 }
 
 
@@ -378,40 +268,6 @@ _attribute_ram_code_ void blt_pm_proc(void)
 	#else
 		bls_pm_setSuspendMask (SUSPEND_ADV | SUSPEND_CONN);
 	#endif
-
-	//do not care about keyScan/button_detect power here, if you care about this, please refer to "8258_ble_remote" demo
-	#if (UI_KEYBOARD_ENABLE)
-		if(scan_pin_need || key_not_released){
-			bls_pm_setSuspendMask (SUSPEND_DISABLE);
-		}
-	#endif
-
-
-	#if (!TEST_CONN_CURRENT_ENABLE)   //test connection power, should disable deepSleep
-			if(sendTerminate_before_enterDeep == 2){  //Terminate OK
-				analog_write(USED_DEEP_ANA_REG, analog_read(USED_DEEP_ANA_REG) | CONN_DEEP_FLG);
-				cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0);  //deepSleep
-			}
-
-
-			if(  !blc_ll_isControllerEventPending() ){  //no controller event pending
-				//adv 60s, deepsleep
-				if( blc_ll_getCurrentState() == BLS_LINK_STATE_ADV && !sendTerminate_before_enterDeep && \
-					clock_time_exceed(advertise_begin_tick , ADV_IDLE_ENTER_DEEP_TIME * 1000000))
-				{
-					cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0);  //deepsleep
-				}
-				//conn 60s no event(key/voice/led), enter deepsleep
-				else if( device_in_connection_state && \
-						clock_time_exceed(latest_user_event_tick, CONN_IDLE_ENTER_DEEP_TIME * 1000000) )
-				{
-
-					bls_ll_terminateConnection(HCI_ERR_REMOTE_USER_TERM_CONN); //push terminate cmd into ble TX buffer
-					bls_ll_setAdvEnable(0);   //disable adv
-					sendTerminate_before_enterDeep = 1;
-				}
-			}
-	#endif  //end of !TEST_CONN_CURRENT_ENABLE
 #endif  //end of BLE_APP_PM_ENABLE
 }
 
@@ -450,76 +306,56 @@ void user_init_normal(void)
 	////// Controller Initialization  //////////
 	blc_ll_initBasicMCU();                      //mandatory
 	blc_ll_initStandby_module(mac_public);				//mandatory
-	blc_ll_initAdvertising_module(mac_public); 	//adv module: 		 mandatory for BLE slave,
+	
+	user_set_rf_power(0, 0, 0);
+	
+	blc_ll_initExtendedAdvertising_module(app_adv_set_param, app_primary_adv_pkt, APP_ADV_SETS_NUMBER);
+	blc_ll_initExtSecondaryAdvPacketBuffer(app_secondary_adv_pkt, MAX_LENGTH_SECOND_ADV_PKT);
+	blc_ll_initExtAdvDataBuffer(app_advData, APP_MAX_LENGTH_ADV_DATA);
+	blc_ll_initExtScanRspDataBuffer(app_scanRspData, APP_MAX_LENGTH_SCAN_RESPONSE_DATA);
+
+
+	blc_ll_setMaxAdvDelay_for_AdvEvent(0);  //no ADV random delay, for debug
+
+	u32 my_adv_interval_min = ADV_INTERVAL_50MS;
+	u32 my_adv_interval_max = ADV_INTERVAL_50MS;
+
 	blc_ll_initConnection_module();				//connection module  mandatory for BLE slave/master
 	blc_ll_initSlaveRole_module();				//slave module: 	 mandatory for BLE slave,
-	blc_ll_initPowerManagement_module();        //pm module:      	 optional
-
-
 
 	////// Host Initialization  //////////
 	blc_gap_peripheral_init();    //gap initialization
+	extern void my_att_init ();
 	my_att_init (); //gatt initialization
 	blc_l2cap_register_handler (blc_l2cap_packet_receive);  	//l2cap initialization
-
-	//Smp Initialization may involve flash write/erase(when one sector stores too much information,
-	//   is about to exceed the sector threshold, this sector must be erased, and all useful information
-	//   should re_stored) , so it must be done after battery check
-#if (BLE_REMOTE_SECURITY_ENABLE)
-	blc_smp_peripheral_init();
-#else
+	// blc_smp_peripheral_init(); 									//SMP initialization
 	blc_smp_setSecurityLevel(No_Security);
-#endif
 
+	blc_ll_setExtAdvParam( ADV_HANDLE0, 		ADV_EVT_PROP_LEGACY_CONNECTABLE_SCANNABLE_UNDIRECTED,  ADV_INTERVAL_50MS, 			ADV_INTERVAL_50MS,
+						   BLT_ENABLE_ADV_ALL,	OWN_ADDRESS_PUBLIC, 								   BLE_ADDR_PUBLIC, 				NULL,
+						   ADV_FP_NONE,  		TX_POWER_8dBm,										   BLE_PHY_1M, 						0,
+						   BLE_PHY_1M, 	 		ADV_SID_0, 												0);
 
+	blc_ll_setExtAdvParam( ADV_HANDLE1, 		ADV_EVT_PROP_LEGACY_CONNECTABLE_SCANNABLE_UNDIRECTED,  ADV_INTERVAL_1S, 			ADV_INTERVAL_1S,
+						   BLT_ENABLE_ADV_ALL,	OWN_ADDRESS_PUBLIC, 								   BLE_ADDR_PUBLIC, 				NULL,
+						   ADV_FP_NONE,  		TX_POWER_8dBm,										   BLE_PHY_1M, 						0,
+						   BLE_PHY_1M, 	 		ADV_SID_1, 												0);
 
+	
 
-///////////////////// USER application initialization ///////////////////
-	bls_ll_setAdvData( (u8 *)tbl_advData, sizeof(tbl_advData) );
-	bls_ll_setScanRspData( (u8 *)tbl_scanRsp, sizeof(tbl_scanRsp));
+	blc_ll_setExtAdvData( ADV_HANDLE0, DATA_OPER_COMPLETE, DATA_FRAGM_ALLOWED, sizeof(tbl_advData) , (u8 *)tbl_advData);
 
+	blc_ll_setExtScanRspData( ADV_HANDLE0, DATA_OPER_COMPLETE, DATA_FRAGM_ALLOWED, sizeof(tbl_scanRsp), (u8 *)tbl_scanRsp);
 
+	blc_ll_setExtAdvEnable_1( BLC_ADV_ENABLE, 1, ADV_HANDLE0, 0 , 0);
 
+	blc_ll_setExtAdvData( ADV_HANDLE1, DATA_OPER_COMPLETE, DATA_FRAGM_ALLOWED, sizeof(iBeacon_advertData) , (u8 *)iBeacon_advertData);
 
-	////////////////// config adv packet /////////////////////
-#if (BLE_REMOTE_SECURITY_ENABLE)
-	u8 bond_number = blc_smp_param_getCurrentBondingDeviceNumber();  //get bonded device number
-	smp_param_save_t  bondInfo;
-	if(bond_number)   //at least 1 bonding device exist
-	{
-		bls_smp_param_loadByIndex( bond_number - 1, &bondInfo);  //get the latest bonding device (index: bond_number-1 )
+	blc_ll_setExtScanRspData( ADV_HANDLE1, DATA_OPER_COMPLETE, DATA_FRAGM_ALLOWED, sizeof(ibeacon_scanRsp), (u8 *)ibeacon_scanRsp);
 
-	}
+	blc_ll_setExtAdvEnable_1( BLC_ADV_ENABLE, 1, ADV_HANDLE1, 0 , 0);
 
-	if(bond_number)   //set direct adv
-	{
-		//set direct adv
-		u8 status = bls_ll_setAdvParam( MY_ADV_INTERVAL_MIN, MY_ADV_INTERVAL_MAX,
-										ADV_TYPE_CONNECTABLE_DIRECTED_LOW_DUTY, app_own_address_type,
-										bondInfo.peer_addr_type,  bondInfo.peer_addr,
-										MY_APP_ADV_CHANNEL,
-										ADV_FP_NONE);
-		if(status != BLE_SUCCESS) {  	while(1); }  //debug: adv setting err
-
-		//it is recommended that direct adv only last for several seconds, then switch to indirect adv
-		bls_ll_setAdvDuration(MY_DIRECT_ADV_TMIE, 1);
-		bls_app_registerEventCallback (BLT_EV_FLAG_ADV_DURATION_TIMEOUT, &app_switch_to_indirect_adv);
-
-	}
-	else   //set indirect adv
-#endif
-	{
-		u8 status = bls_ll_setAdvParam(  MY_ADV_INTERVAL_MIN, MY_ADV_INTERVAL_MAX,
-										 ADV_TYPE_CONNECTABLE_UNDIRECTED, app_own_address_type,
-										 0,  NULL,
-										 MY_APP_ADV_CHANNEL,
-										 ADV_FP_NONE);
-		if(status != BLE_SUCCESS) {  	while(1); }  //debug: adv setting err
-	}
-
-	bls_ll_setAdvEnable(1);  //adv enable
-
-	blc_ota_initOtaServer_module();
+	//blc_ota_initOtaServer_module();
 
 	//set rf power index, user must set it after every suspend wakeup, cause relative setting will be reset in suspend
 	user_set_rf_power(0, 0, 0);
@@ -536,46 +372,12 @@ void user_init_normal(void)
 
 	///////////////////// Power Management initialization///////////////////
 #if(BLE_APP_PM_ENABLE)
+	bls_pm_setSuspendMask (SUSPEND_ADV | SUSPEND_CONN);
 	blc_ll_initPowerManagement_module();
-
-	#if (PM_DEEPSLEEP_RETENTION_ENABLE)
-	    blc_pm_setDeepsleepRetentionType(DEEPSLEEP_MODE_RET_SRAM_LOW16K); //default use 16k deep retention
-		bls_pm_setSuspendMask (SUSPEND_ADV | DEEPSLEEP_RETENTION_ADV | SUSPEND_CONN | DEEPSLEEP_RETENTION_CONN);
-		blc_pm_setDeepsleepRetentionThreshold(95, 95);
-
-		#if(MCU_CORE_TYPE == MCU_CORE_825x)
-			blc_pm_setDeepsleepRetentionEarlyWakeupTiming(TEST_CONN_CURRENT_ENABLE ? 240 : 260);
-		#elif((MCU_CORE_TYPE == MCU_CORE_827x))
-			blc_pm_setDeepsleepRetentionEarlyWakeupTiming(TEST_CONN_CURRENT_ENABLE ? 340 : 350);
-		#else
-		#endif
-	#else
-		bls_pm_setSuspendMask (SUSPEND_ADV | SUSPEND_CONN);
-	#endif
-
-	bls_app_registerEventCallback (BLT_EV_FLAG_SUSPEND_ENTER, &ble_remote_set_sleep_wakeup);
-#else
-	bls_pm_setSuspendMask (SUSPEND_DISABLE);
+	blc_pm_setDeepsleepRetentionThreshold(95, 95);
+	blc_pm_setDeepsleepRetentionEarlyWakeupTiming(240);
+	blc_pm_setDeepsleepRetentionType(DEEPSLEEP_MODE_RET_SRAM_LOW32K); //default use 16k deep retention
 #endif
-
-
-	#if (UI_KEYBOARD_ENABLE)
-		/////////// keyboard gpio wakeup init ////////
-		u32 pin[] = KB_DRIVE_PINS;
-		for (int i=0; i<(sizeof (pin)/sizeof(*pin)); i++)
-		{
-			cpu_set_gpio_wakeup (pin[i], Level_High,1);  //drive pin pad high wakeup deepsleep
-		}
-
-		bls_app_registerEventCallback (BLT_EV_FLAG_GPIO_EARLY_WAKEUP, &proc_keyboard);
-	#elif (UI_BUTTON_ENABLE)
-
-		cpu_set_gpio_wakeup (SW1_GPIO, Level_Low,1);  //button pin pad low wakeUp suspend/deepSleep
-		cpu_set_gpio_wakeup (SW2_GPIO, Level_Low,1);  //button pin pad low wakeUp suspend/deepSleep
-
-		bls_app_registerEventCallback (BLT_EV_FLAG_GPIO_EARLY_WAKEUP, &proc_button);
-	#endif
-
 
 	advertise_begin_tick = clock_time();
 }
@@ -600,19 +402,6 @@ _attribute_ram_code_ void user_init_deepRetn(void)
 
 	irq_enable();
 
-	#if (UI_KEYBOARD_ENABLE)
-		/////////// keyboard gpio wakeup init ////////
-		u32 pin[] = KB_DRIVE_PINS;
-		for (int i=0; i<(sizeof (pin)/sizeof(*pin)); i++)
-		{
-			cpu_set_gpio_wakeup (pin[i], Level_High,1);  //drive pin pad high wakeup deepsleep
-		}
-	#elif (UI_BUTTON_ENABLE)
-
-		cpu_set_gpio_wakeup (SW1_GPIO, Level_Low,1);  //button pin pad low wakeUp suspend/deepSleep
-		cpu_set_gpio_wakeup (SW2_GPIO, Level_Low,1);  //button pin pad low wakeUp suspend/deepSleep
-	#endif
-
 #endif
 }
 
@@ -627,35 +416,7 @@ void main_loop (void)
 
 	////////////////////////////////////// BLE entry /////////////////////////////////
 	blt_sdk_main_loop();
-
-
-	////////////////////////////////////// UI entry /////////////////////////////////
-	#if (UI_KEYBOARD_ENABLE)
-			proc_keyboard (0,0, 0);
-	#elif (UI_BUTTON_ENABLE)
-			// process button 1 second later after power on, to avoid power unstable
-			if(!button_detect_en && clock_time_exceed(0, 1000000)){
-				button_detect_en = 1;
-			}
-			if(button_detect_en && clock_time_exceed(button_detect_tick, 5000))
-			{
-				button_detect_tick = clock_time();
-				proc_button(0, 0, 0);  //button triggers pair & unpair  and OTA
-			}
-	#endif
-
-
-	////////////////////////////////////// PM Process /////////////////////////////////
-	#if (UI_KEYBOARD_ENABLE)
-			blt_pm_proc();
-	#elif (UI_BUTTON_ENABLE)
-			if(button_not_released){
-				bls_pm_setSuspendMask (SUSPEND_DISABLE);
-			}
-			else{
-				bls_pm_setSuspendMask (SUSPEND_ADV | SUSPEND_CONN);
-			}
-	#endif
+	blt_pm_proc();
 }
 
 
