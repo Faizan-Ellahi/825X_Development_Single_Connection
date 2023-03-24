@@ -45,7 +45,7 @@ all: b85m_ble_single_connection_sdk.elf secondary-outputs
 b85m_ble_single_connection_sdk.elf: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: TC32 C Linker'
-	tc32-elf-ld --gc-sections -L"D:\TLSDK\825X_Development_Single_Connection\b85_ble_sdk\proj_lib" -T ../boot.link -o"b85m_ble_single_connection_sdk.elf" $(OBJS) $(USER_OBJS) $(LIBS)
+	tc32-elf-ld --gc-sections -L"E:\M_Hassaan_Khalid\Projects\825X_Development_Single_Connection\b85_ble_sdk\proj_lib" -T ../boot.link -o"b85m_ble_single_connection_sdk.elf" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 	$(MAKE) --no-print-directory post-build
@@ -74,7 +74,7 @@ clean:
 	-@echo ' '
 
 post-build:
-	-"D:\TLSDK\825X_Development_Single_Connection\b85_ble_sdk/tl_check_fw.sh"   825x_ble_sample   b85m_ble_single_connection_sdk
+	-"E:\M_Hassaan_Khalid\Projects\825X_Development_Single_Connection\b85_ble_sdk/tl_check_fw.sh"   825x_ble_sample   b85m_ble_single_connection_sdk
 	-@echo ' '
 
 secondary-outputs: $(LST) $(FLASH_IMAGE) $(SIZEDUMMY)
