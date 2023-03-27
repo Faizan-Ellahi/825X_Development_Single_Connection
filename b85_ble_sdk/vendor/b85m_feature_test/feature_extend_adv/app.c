@@ -89,20 +89,32 @@ _attribute_data_retention_	my_fifo_t	blt_txfifo = {
 //	 Adv Packet, Response Packet
 //////////////////////////////////////////////////////////////////////////////
 const u8	tbl_advData[] = {
-	 0x08, 0x09, 'f', 'e', 'a', 't', 'u', 'r', 'e',
+	 0x08, 0x09, 'a', 'e', 'a', 't', 'u', 'r', 'e', //feature
 	 0x02, 0x01, 0x05, 							// BLE limited discoverable mode and BR/EDR not supported
 	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
 	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
 };
 
 const u8	tbl_scanRsp [] = {
-	 0x08, 0x09, 'f', 'e', 'a', 't', 'u', 'r', 'e',
+	 0x08, 0x09, 'a', 'e', 'a', 't', 'u', 'r', 'e', //feature
 };
+
+const u8	tbl_advData1[] = {   
+	 0x08, 0x09, '1', 'e', 'a', 't', 'u', 'r', 'e', //feature
+	 0x02, 0x01, 0x05, 							// BLE limited discoverable mode and BR/EDR not supported
+	 0x03, 0x19, 0x80, 0x01, 					// 384, Generic Remote Control, Generic category
+	 0x05, 0x02, 0x12, 0x18, 0x0F, 0x18,		// incomplete list of service class UUIDs (0x1812, 0x180F)
+};
+
+const u8	tbl_scanRsp1 [] = {
+	 0x08, 0x09, '1', 'e', 'a', 't', 'u', 'r', 'e', // feature
+};
+
 
 
 _attribute_data_retention_	int device_in_connection_state;
 
-#define	APP_ADV_SETS_NUMBER						1			// Number of Supported Advertising Sets
+#define	APP_ADV_SETS_NUMBER						2			// Number of Supported Advertising Sets
 #define APP_MAX_LENGTH_ADV_DATA					1024		// Maximum Advertising Data Length,   (if legacy ADV, max length 31 bytes is enough)
 #define APP_MAX_LENGTH_SCAN_RESPONSE_DATA		  31		// Maximum Scan Response Data Length, (if legacy ADV, max length 31 bytes is enough)
 
@@ -383,7 +395,7 @@ void user_init_normal(void)
 
 	blc_ll_setExtAdvEnable_1( BLC_ADV_ENABLE, 1, ADV_HANDLE0, 0 , 0);
 
-#elif 0  //Legacy, connectable_scannable
+#elif 1  //Legacy, connectable_scannable
 
 	blc_ll_initConnection_module();				//connection module  mandatory for BLE slave/master
 	blc_ll_initSlaveRole_module();				//slave module: 	 mandatory for BLE slave,
@@ -396,16 +408,32 @@ void user_init_normal(void)
 	blc_smp_peripheral_init(); 									//SMP initialization
 
 
+    blc_ll_setExtAdvParam( ADV_HANDLE0, 		ADV_EVT_PROP_LEGACY_CONNECTABLE_SCANNABLE_UNDIRECTED,  		   ADV_INTERVAL_2S, 			ADV_INTERVAL_2S,
+						   BLT_ENABLE_ADV_ALL,	OWN_ADDRESS_PUBLIC, 										   BLE_ADDR_PUBLIC, 				NULL,
+						   ADV_FP_NONE,  		TX_POWER_8dBm,												   BLE_PHY_1M, 						0,
+						   BLE_PHY_1M, 	 		ADV_SID_0, 													   0);		
+
+	blc_ll_setExtAdvParam( ADV_HANDLE1, 		ADV_EVT_PROP_LEGACY_CONNECTABLE_SCANNABLE_UNDIRECTED,  		   ADV_INTERVAL_50MS , 			ADV_INTERVAL_50MS,
+						   BLT_ENABLE_ADV_ALL,	OWN_ADDRESS_PUBLIC, 										   BLE_ADDR_PUBLIC, 				NULL,
+						   ADV_FP_NONE,  		TX_POWER_8dBm,												   BLE_PHY_1M, 						0,
+						   BLE_PHY_1M, 	 		ADV_SID_1, 													   0);	
+
+	/*					   
+
 	blc_ll_setExtAdvParam( ADV_HANDLE0, 		ADV_EVT_PROP_LEGACY_CONNECTABLE_SCANNABLE_UNDIRECTED,  		   my_adv_interval_min, 			my_adv_interval_max,
 						   BLT_ENABLE_ADV_ALL,	OWN_ADDRESS_PUBLIC, 										   BLE_ADDR_PUBLIC, 				NULL,
 						   ADV_FP_NONE,  		TX_POWER_8dBm,												   BLE_PHY_1M, 						0,
-						   BLE_PHY_1M, 	 		ADV_SID_0, 													   0);
+						   BLE_PHY_1M, 	 		ADV_SID_0, 													   0);	
+	*/					   				   					   
 
 	blc_ll_setExtAdvData( ADV_HANDLE0, DATA_OPER_COMPLETE, DATA_FRAGM_ALLOWED, sizeof(tbl_advData) , (u8 *)tbl_advData);
+	blc_ll_setExtAdvData( ADV_HANDLE1, DATA_OPER_COMPLETE, DATA_FRAGM_ALLOWED, sizeof(tbl_advData1) , (u8 *)tbl_advData1);
 
 	blc_ll_setExtScanRspData( ADV_HANDLE0, DATA_OPER_COMPLETE, DATA_FRAGM_ALLOWED, sizeof(tbl_scanRsp), (u8 *)tbl_scanRsp);
+	blc_ll_setExtScanRspData( ADV_HANDLE1, DATA_OPER_COMPLETE, DATA_FRAGM_ALLOWED, sizeof(tbl_scanRsp1), (u8 *)tbl_scanRsp1);
 
 	blc_ll_setExtAdvEnable_1( BLC_ADV_ENABLE, 1, ADV_HANDLE0, 0 , 0);
+	blc_ll_setExtAdvEnable_1( BLC_ADV_ENABLE, 1, ADV_HANDLE1, 0 , 0);
 
 #elif 0 // Extended, None_Connectable_None_Scannable undirected, without auxiliary packet
 
